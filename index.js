@@ -59,7 +59,7 @@ async function viewAllDepartments() {
 
 async function viewAllRoles() {
   const { rows } = await pool.query(`
-    SELECT roles.*, departments.name AS department_name
+    SELECT roles.id, roles.title, roles.salary, departments.name AS department
     FROM roles
     LEFT JOIN departments ON roles.department_id = departments.id
   `);
@@ -68,7 +68,7 @@ async function viewAllRoles() {
 
 async function viewAllEmployees() {
   const { rows } = await pool.query(`
-    SELECT e.*, r.title, r.salary, d.name AS department, 
+    SELECT e.id, e.first_name, e.last_name, r.title, r.salary, d.name AS department, 
            CONCAT(m.first_name, ' ', m.last_name) AS manager
     FROM employees e
     LEFT JOIN roles r ON e.role_id = r.id
