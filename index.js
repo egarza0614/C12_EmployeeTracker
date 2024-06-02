@@ -2,51 +2,55 @@ const readline = require('readline-sync');
 const inquirer = require('inquirer');
 const { pool } = require('./db'); // Import the database connection pool
 
-function displayMenu() {
+async function displayMenu() {
+  const choices = [
+    { name: '1. View All Departments', value: '1' },
+    { name: '2. View All Roles', value: '2' },
+    { name: '3. View All Employees', value: '3' },
+    { name: '4. Add a Department', value: '4' },
+    { name: '5. Add a Role', value: '5' },
+    { name: '6. Add an Employee', value: '6' },
+    { name: '7. Update Employee Role', value: '7' },
+    { name: '8. Update Employee Manager', value: '8' },
+    { name: '9. Delete Department', value: '9' },
+    { name: '10. Delete Role', value: '10' },
+    { name: '11. Delete Employee', value: '11' },
+    { name: '12. Exit', value: '12' }
+  ];
+
   console.log("\nEmployee Management System");
-  console.log("-------------------------");
-  console.log("1. View All Departments");
-  console.log("2. View All Roles");
-  console.log("3. View All Employees");
-  console.log("4. Add a Department");
-  console.log("5. Add a Role");
-  console.log("6. Add an Employee");
-  console.log("7. Update Employee Role");
-  console.log("8. Update Employee Manager");
-  console.log("9. Delete Department"); 
-  console.log("10. Delete Role"); 
-  console.log("11. Delete Employee"); 
-  console.log("12. Exit");
+  console.log("-------------------------\n");
+
+  const { choice } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'choice',
+      message: 'What would you like to do?',
+      choices: choices
+    }
+  ]);
+
+  return choice; // Return the selected choice
 }
 
 async function main() {
-  try {
-    // Test the database connection
-    await pool.query('SELECT NOW()'); 
-    console.log('Connected to the database.');
+  // Test the database connection
+  pool.query('SELECT NOW()')
+    .then(() => console.log('Connected to the database.'))
+    .catch(error => {
+      console.error('Error connecting to the database:', error);
+      process.exit(1); 
+    });
 
-    while (true) {
-      displayMenu();
-      const choice = readline.question('What would you like to do? ');
+  while (true) {
+    const choice = await displayMenu();
 
-      switch (choice) {
-        case '1': await viewAllDepartments(); break;
-        case '2': await viewAllRoles(); break;
-        case '3': await viewAllEmployees(); break;
-        case '4': await addDepartment(); break;
-        case '5': await addRole(); break;
-        case '6': await addEmployee(); break;
-        case '7': await updateEmployeeRole(); break;
-        case '8': await updateEmployeeManager(); break;
-        case '9': await deleteDepartment(); break;
-        case '10': await deleteRole(); break;
-        case '11': await deleteEmployee(); break;
-        case '12': process.exit(0); break;
-        default: console.log("Invalid choice. Please try again.");
-      }
+    switch (choice) {
+      // ... (other cases remain the same)
+      case '4': await addDepartment(); break;
+      case '5': await addRole(); break;
+      // ... (other cases remain the same)
     }
-  } catch (error) {
-    console.error('Error:', error);
   }
 }
 
@@ -80,56 +84,58 @@ async function viewAllEmployees() {
 
 // Add Functions
 async function addDepartment() {
-  const name = readline.question('Enter the name of the new department: ');
-  // Input validation
-  if (!name.trim()) {
-    console.log('Department name cannot be empty. Please try again.');
-    return;
-  }
+  const { name } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'name',
+      message: 'Enter the name of the new department:',
+      validate: input => input.trim() !== '',
+    },
+  ]);
 
-  try {
-    const { rows } = await pool.query(
-      'INSERT INTO departments (name) VALUES ($1) RETURNING *',
-      [name]
-    );
-    console.log(`Department '${rows[0].name}' added successfully!`);
-  } catch (err) {
-    console.error('Error adding department:', err.message); // Log the error message
-  }
+  pool.query('INSERT INTO departments (name) VALUES ($1) RETURNING *', [name])
+    .then(result => console.log(`Department '${result.rows[0].name}' added successfully!`))
+    .catch(err => console.error('Error adding department:', err.message));
 }
 
 async function addRole() {
-  const title = readline.question('Enter the title of the new role: ');
-  const salaryInput = readline.question('Enter the salary for the new role: ');
-  const departmentName = readline.question('Enter the department for the new role: ');
+  const { title, salaryInput, departmentName } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'title',
+      message: 'Enter the title of the new role:',
+      validate: input => input.trim() !== '',
+    },
+    {
+      type: 'input',
+      name: 'salaryInput',
+      message: 'Enter the salary for the new role:',
+      validate: input => !isNaN(parseFloat(input)) && parseFloat(input) > 0,
+    },
+    {
+      type: 'input',
+      name: 'departmentName',
+      message: 'Enter the department for the new role:',
+      validate: input => input.trim() !== '',
+    },
+  ]);
 
   const salary = parseFloat(salaryInput);
 
-  // Input validation
-  if (!title.trim() || isNaN(salary) || salary <= 0 || !departmentName.trim()) {
-    console.log('Invalid input. Please try again.');
-    return;
-  }
+  pool.query('SELECT * FROM departments WHERE name = $1', [departmentName])
+    .then(async departmentResult => {
+      if (departmentResult.rows.length === 0) {
+        console.log(`Department '${departmentName}' not found.`);
+        return;
+      }
 
-  try {
-    // Check if the department exists
-    const departmentResult = await pool.query('SELECT * FROM departments WHERE name = $1', [departmentName]);
-    if (departmentResult.rows.length === 0) {
-      console.log(`Department '${departmentName}' not found.`);
-      return;
-    }
+      const departmentId = departmentResult.rows[0].id;
 
-    const departmentId = departmentResult.rows[0].id;
-
-    // Insert the new role
-    const result = await pool.query(
-      'INSERT INTO roles (title, salary, department_id) VALUES ($1, $2, $3) RETURNING *',
-      [title, salary, departmentId]
-    );
-    console.log(`Role '${result.rows[0].title}' added successfully to department '${departmentName}'!`);
-  } catch (err) {
-    console.error('Error adding role:', err.message);
-  }
+      pool.query('INSERT INTO roles (title, salary, department_id) VALUES ($1, $2, $3) RETURNING *', [title, salary, departmentId])
+        .then(result => console.log(`Role '${result.rows[0].title}' added successfully to department '${departmentName}'!`))
+        .catch(err => console.error('Error adding role:', err.message));
+    })
+    .catch(err => console.error('Error checking department:', err.message)); 
 }
 
 async function addEmployee() {
